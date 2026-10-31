@@ -1,0 +1,658 @@
+{
+  "info": {
+    "name": "SubTrack API",
+    "description": "Requests for every endpoint of the SubTrack API. Run the whole collection in order (Collection Runner): request 2 saves {{subId}}, request 3 saves {{sub2Id}}; requests 14 and 16 delete them again, so the run can be repeated.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Database is up\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(body.status).to.eql(\"ok\");",
+              "  pm.expect(body.database).to.eql(\"up\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Create subscription (Netflix)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions"
+          ]
+        },
+        "description": "Creates Netflix and saves its id into {{subId}}.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Netflix\",\n  \"category\": \"streaming\",\n  \"price\": 4990,\n  \"currency\": \"KZT\",\n  \"billing_cycle\": \"monthly\",\n  \"start_date\": \"2026-01-15\",\n  \"active\": true,\n  \"notes\": \"Family plan, shared with my brother\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+              "const sub = pm.response.json();",
+              "pm.collectionVariables.set(\"subId\", sub.id);",
+              "pm.test(\"Has id and computed fields\", () => {",
+              "  pm.expect(sub.id).to.be.a(\"number\");",
+              "  pm.expect(sub.monthly_cost).to.eql(4990);",
+              "  pm.expect(sub.next_payment_date).to.be.a(\"string\");",
+              "  pm.expect(sub.cancelled_at).to.eql(null);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Create subscription (iCloud, yearly USD)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions"
+          ]
+        },
+        "description": "Second subscription for list/stats. Saves its id into {{sub2Id}}.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"iCloud+ 200GB\",\n  \"category\": \"cloud\",\n  \"price\": 29.99,\n  \"currency\": \"USD\",\n  \"billing_cycle\": \"yearly\",\n  \"start_date\": \"2025-03-01\",\n  \"notes\": \"Photos backup\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+              "const sub = pm.response.json();",
+              "pm.collectionVariables.set(\"sub2Id\", sub.id);",
+              "pm.test(\"Yearly price is spread per month\", () => pm.expect(sub.monthly_cost).to.eql(2.5));",
+              "pm.test(\"active defaults to true\", () => pm.expect(sub.active).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Create duplicate name -> 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions"
+          ]
+        },
+        "description": "Names are unique case-insensitive: NETFLIX = Netflix.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"NETFLIX\",\n  \"category\": \"streaming\",\n  \"price\": 4990,\n  \"currency\": \"KZT\",\n  \"billing_cycle\": \"monthly\",\n  \"start_date\": \"2026-01-15\",\n  \"active\": true,\n  \"notes\": \"Family plan, shared with my brother\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"Error message\", () => pm.expect(pm.response.json().detail).to.include(\"already exists\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Create invalid -> 422",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions"
+          ]
+        },
+        "description": "Negative price and cancelled_at on an active subscription.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Broken\",\n  \"category\": \"streaming\",\n  \"price\": -5,\n  \"currency\": \"KZT\",\n  \"billing_cycle\": \"monthly\",\n  \"start_date\": \"2026-01-15\",\n  \"active\": true,\n  \"cancelled_at\": \"2026-02-01\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"Validation errors are listed\", () => pm.expect(pm.response.json().detail).to.be.an(\"array\").that.is.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. List subscriptions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test(\"Page shape\", () => {",
+              "  pm.expect(body.items).to.be.an(\"array\");",
+              "  pm.expect(body.total).to.be.at.least(2);",
+              "  pm.expect(body.limit).to.eql(20);",
+              "  pm.expect(body.offset).to.eql(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. List with filters + sort",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions?category=streaming&active=true&sort=-price&limit=10",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions"
+          ],
+          "query": [
+            {
+              "key": "category",
+              "value": "streaming"
+            },
+            {
+              "key": "active",
+              "value": "true"
+            },
+            {
+              "key": "sort",
+              "value": "-price"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test(\"Only active streaming\", () => body.items.forEach(s => {",
+              "  pm.expect(s.category).to.eql(\"streaming\");",
+              "  pm.expect(s.active).to.eql(true);",
+              "}));",
+              "pm.test(\"Sorted by price desc\", () => {",
+              "  const prices = body.items.map(s => s.price);",
+              "  pm.expect(prices).to.eql([...prices].sort((a, b) => b - a));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Get subscription by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/{{subId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "{{subId}}"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Same id\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"subId\"))));",
+              "pm.test(\"Name\", () => pm.expect(pm.response.json().name).to.eql(\"Netflix\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Get non-existent ID -> 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/999999",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "999999"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"Error message\", () => pm.expect(pm.response.json().detail).to.eql(\"Subscription 999999 not found\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Replace subscription (PUT)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/{{subId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "{{subId}}"
+          ]
+        },
+        "description": "Full update: the whole object is sent.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Netflix\",\n  \"category\": \"streaming\",\n  \"price\": 5990,\n  \"currency\": \"KZT\",\n  \"billing_cycle\": \"monthly\",\n  \"start_date\": \"2026-01-15\",\n  \"active\": true,\n  \"notes\": \"Upgraded to Premium 4K\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "const sub = pm.response.json();",
+              "pm.test(\"Price and notes replaced\", () => {",
+              "  pm.expect(sub.price).to.eql(5990);",
+              "  pm.expect(sub.notes).to.eql(\"Upgraded to Premium 4K\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Statistics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/stats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "stats"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "const s = pm.response.json();",
+              "pm.test(\"Counters\", () => {",
+              "  pm.expect(s.total).to.be.at.least(2);",
+              "  pm.expect(s.active + s.cancelled).to.eql(s.total);",
+              "});",
+              "pm.test(\"Spend per currency\", () => {",
+              "  pm.expect(s.monthly_spend).to.have.property(\"KZT\");",
+              "  pm.expect(s.yearly_spend).to.have.property(\"USD\");",
+              "  pm.expect(s.by_category).to.have.property(\"streaming\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Upcoming payments (31 days)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/upcoming?days=31",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "upcoming"
+          ],
+          "query": [
+            {
+              "key": "days",
+              "value": "31"
+            }
+          ]
+        },
+        "description": "A monthly subscription always charges within 31 days."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test(\"Netflix is in the list\", () => {",
+              "  const ids = body.items.map(i => i.id);",
+              "  pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"subId\")));",
+              "});",
+              "pm.test(\"days_left within range\", () => body.items.forEach(i => pm.expect(i.days_left).to.be.within(0, 31)));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Cancel subscription (PATCH)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/{{subId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "{{subId}}"
+          ]
+        },
+        "description": "Partial update: only `active` is sent; cancelled_at is set to today automatically.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+              "const sub = pm.response.json();",
+              "pm.test(\"Cancelled\", () => {",
+              "  pm.expect(sub.active).to.eql(false);",
+              "  pm.expect(sub.cancelled_at).to.be.a(\"string\");",
+              "  pm.expect(sub.next_payment_date).to.eql(null);",
+              "});",
+              "pm.test(\"Other fields kept\", () => pm.expect(sub.price).to.eql(5990));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Delete subscription",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/{{subId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "{{subId}}"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 204\", () => pm.response.to.have.status(204));",
+              "pm.test(\"Empty body\", () => pm.expect(pm.response.text()).to.eql(\"\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Get deleted subscription -> 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/{{subId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "{{subId}}"
+          ]
+        },
+        "description": ""
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Delete second subscription (cleanup)",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/subscriptions/{{sub2Id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "subscriptions",
+            "{{sub2Id}}"
+          ]
+        },
+        "description": "Removes iCloud so the collection can be run again from a clean state."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "subId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sub2Id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
